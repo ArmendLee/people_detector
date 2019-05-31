@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>project_filter_icp</name>
+  <version>0.0.0</version>
+  <description>The project_filter_icp package</description>
+
+  <maintainer email="lhd@todo.todo">lhd</maintainer>
+
+  <license>TODO</license>
+
+    <exec_depend>message_runtime</exec_depend>
+
+  <!--   <doc_depend>doxygen</doc_depend> -->
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>pcl_conversions</build_depend>
+  <build_depend>pcl_msgs</build_depend>
+  <build_depend>pcl_ros</build_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>detector_msg</build_depend>
+  <build_depend>message_runtime</build_depend>
+
+
+  <build_export_depend>pcl_conversions</build_export_depend>
+  <build_export_depend>pcl_msgs</build_export_depend>
+  <build_export_depend>pcl_ros</build_export_depend>
+  <build_export_depend>roscpp</build_export_depend>
+  <build_export_depend>sensor_msgs</build_export_depend>
+  <build_export_depend>detector_msg</build_export_depend>
+
+  <exec_depend>pcl_conversions</exec_depend>
+  <exec_depend>pcl_msgs</exec_depend>
+  <exec_depend>pcl_ros</exec_depend>
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>detector_msg</exec_depend>
+  
+
+
+
+  <!-- The export tag contains other, unspecified, tags -->
+  <export>
+    <!-- Other tools can request additional information be placed here -->
+
+  </export>
+</package>
