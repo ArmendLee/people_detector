@@ -202,7 +202,7 @@ public:
         *cloud_raw_merge += *transformed_cloud;
         // std::cout<<cloud_raw_merge->size()<<std::endl;
 
-        project_pc_image(image_origin,cloud_raw_merge);
+        project_pc_image(image_origin,cloud_raw_merge,dt_result);
         
         sensor_msgs::PointCloud2 ros_cloud;
         pcl::toROSMsg(*cloud_raw_merge, ros_cloud);
@@ -217,22 +217,20 @@ public:
     }
 
 
-    bool in_bounding_box(cv::Point2f pt,float &l_x,float &l_y,float &r_x,float &r_y){
+    bool in_bounding_box(cv::Point2f &pt,const float &l_x,const float &l_y,const float &r_x,const float &r_y){
         if( pt.x < l_x || pt.y > l_y || pt.x > r_x || pt.y < r_y){
             return false;
             }
         return true;
     }
     
-    void project_pc_image(cv::Mat & img,pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
+    void project_pc_image(cv::Mat & img,pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
+                            const detector_msg::detection_resultConstPtr &dt_result){
         
-        // cv::Mat image_origin = cv::imread("/media/data/temp/image/0.jpeg");
-        // pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_origin(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_withoutNAN(new pcl::PointCloud<pcl::PointXYZ>);
-        // pcl::io::loadPCDFile<pcl::PointXYZI> ("/media/liuzhiyang/data/temp/pcd/0.pcd", *cloud_origin);
         std::vector<int> indices;
         pcl::removeNaNFromPointCloud(*cloud, *cloud_withoutNAN, indices);
-
+        cloud->clear();
         std::vector<cv::Point3f> pts_3d;
         for (size_t i = 0; i < cloud->size(); ++i)
         {
@@ -243,16 +241,6 @@ public:
             }
         }
 
-        // using iterator
-
-        // read calibration parameter
-
-        // cv::Mat<double>(3, 3) camera_matrix(1673.764472, 0.0, 615.269162, 0.0, 1671.726940, 486.603777 0.0, 0.0, 1.0);
-        // cv::Mat<double>(1,4) distortion_coeff(-0.093271, 0.295162, -0.002398, 0.000073); 
-        // cv::Mat<double>(3,1) r_vec(-0.63735, -1.14282, -0.0275067);
-        // cv::Mat<double>(3,1) t_vec(-0.0251048, 0.064995, -0.513204);
-
-        // project 3d-points into image view
         std::vector<cv::Point2f> pts_2d;
         cv::projectPoints(pts_3d, _leftlidar_to_camera_rvec, _leftlidar_to_camera_tvec, _camera_intrinsic_coeff, _camera_distortion_coeff, pts_2d);
         cv::Mat img_show = cv::Mat::zeros(img.size(),CV_8UC3);// img.clone()
@@ -260,35 +248,42 @@ public:
         int image_cols = image_origin.cols;
         std::cout<<pts_2d.size()<<std::endl;
         int count=0;
+        bool outside;
         for (size_t i = 0; i < pts_2d.size(); ++i)
         {
+            outside = true;
             cv::Point2f point_2d = pts_2d[i];
-            if (point_2d.x < 0 || point_2d.x > image_cols || point_2d.y < 0 || point_2d.y > image_rows)
-            {
+
+            if (point_2d.x < 0 || point_2d.x > image_cols || point_2d.y < 0 || point_2d.y > image_rows){
                 continue;
             }
-            else
-            {
-                img_show.at<cv::Vec3b>(point_2d.y, point_2d.x)[0] = 255;
-                img_show.at<cv::Vec3b>(point_2d.y, point_2d.x)[1] = 255;
-                img_show.at<cv::Vec3b>(point_2d.y, point_2d.x)[2] = 255;
-                ++count;
-            }
-
-            if (point_2d.x > 0 && point_2d.x < image_cols && point_2d.y > 0 && point_2d.y < image_rows)
-            {
-                img_show.at<cv::Vec3b>(point_2d.y, point_2d.x)[0] = 255;
-                img_show.at<cv::Vec3b>(point_2d.y, point_2d.x)[1] = 255;
-                img_show.at<cv::Vec3b>(point_2d.y, point_2d.x)[2] = 255;
-                ++count;
-
-            } 
-            else
-            {
-                continue;
-            }  
+            // for(int j=0; j < dt_result->boxs.size(); ++j){
+            //     if(in_bounding_box(point_2d,dt_result->boxs[j].l_x,dt_result->boxs[j].l_y,
+            //                         dt_result->boxs[j].r_x,dt_result->boxs[j].r_y))
+            //         {
+            //             outside = false;
+            //             continue;
+            //         }}
+            // if(outside){
+                // cloud->push_back(pcl::PointXYZ(pts_3d[i].x,pts_3d[i].y,pts_3d[i].z));
+                cv::circle(img_show, point_2d, 5, cv::Scalar(255, 0, 0), -1);
+            // }
         }
-        std::cout<<"project points: "<<count<<std::endl;
+
+
+            // else{
+            //     cv::circle(img_show, point_2d, 5, cv::Scalar(255, 0, 0), -1);          
+            //     ++count;
+            // }
+
+            // if (point_2d.x > 0 && point_2d.x < image_cols && point_2d.y > 0 && point_2d.y < image_rows){
+            //     cv::circle(img_show, point_2d, 5, cv::Scalar(255, 0, 0), -1);
+            //     ++count;
+            // } 
+            // else{
+            //     continue;
+            // }  
+        cv::namedWindow("img_projection",0);
         cv::imshow("img_projection", img_show);
         cv::waitKey(3); 
     }
