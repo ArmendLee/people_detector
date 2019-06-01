@@ -129,15 +129,15 @@ public:
 
         project_pc_image(image_origin,cloud_raw_merge,dt_result);
         
-        // const auto t1 = std::chrono::high_resolution_clock::now();
-        // if(cloud_former->size()>0){
-        //     pairAlign(cloud_raw_merge, cloud_former, cloud_all, _sequence_transform, false);
-        //     std::cout<<_sequence_transform<<std::endl;
-        // }
-        // const auto t2 = std::chrono::high_resolution_clock::now();
-        // std::cout << "Used time:" << (t2-t1).count()*1e-6 << "ms" << std::endl;
-        // cloud_former->clear();
-        // pcl::copyPointCloud(*cloud_raw_merge,*cloud_former);
+        const auto t1 = std::chrono::high_resolution_clock::now();
+        if(cloud_former->size()>0){
+            pairAlign(cloud_raw_merge, cloud_former, cloud_all, _sequence_transform, false);
+            std::cout<<_sequence_transform<<std::endl;
+        }
+        const auto t2 = std::chrono::high_resolution_clock::now();
+        std::cout << "Used time:" << (t2-t1).count()*1e-6 << "ms" << std::endl;
+        cloud_former->clear();
+        pcl::copyPointCloud(*cloud_raw_merge,*cloud_former);
 
 
         sensor_msgs::PointCloud2 ros_cloud;
