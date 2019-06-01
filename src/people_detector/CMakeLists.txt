@@ -177,7 +177,7 @@ add_executable(${PROJECT_NAME}_node src/sub_detect_pub.cpp)
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBS}
-  /home/lhd/Documents/vaml-master/caffe-detector-distribute/lib/libcaffe_detector.so
+  /home/lhd/Documents/vaml-master/build/caffe-detectors/libcaffe_detector.so
 )
 
 #############
