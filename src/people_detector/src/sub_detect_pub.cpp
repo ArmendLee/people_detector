@@ -41,7 +41,6 @@ public:
     ~ImageConverter() {}
  
 void imageCb(const sensor_msgs::ImageConstPtr& msg){
-        const auto t1 = std::chrono::high_resolution_clock::now();
         cv_bridge::CvImagePtr cv_ptr;
         try
         {
@@ -58,8 +57,9 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
 
         cv::Mat img = cv_ptr->image;
 
-	    std::cout<<"read image victory"<<std::endl;
+	    // std::cout<<"read image victory"<<std::endl;
         
+        // const auto t1 = std::chrono::high_resolution_clock::now();
         std::vector<cz::Detection> dets;
         detector_ptr->detect(img, dets, 0.3);
         detector_msg::detection_result result;
@@ -78,12 +78,12 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
             result.boxs.push_back(target);
         }
         pub.publish(result);
-        const auto t2 = std::chrono::high_resolution_clock::now();
-        std::cout << "Used time:" << (t2-t1).count()*1e-6 << "ms" << std::endl;
+        // const auto t2 = std::chrono::high_resolution_clock::now();
+        // std::cout << "Used time:" << (t2-t1).count()*1e-6 << "ms" << std::endl;
         detector_ptr->drawBox(img, dets);
-        cv::namedWindow("img",0);
-        cv::imshow("img", img);
-        cv::waitKey(3);    
+        // cv::namedWindow("img",0);
+        // cv::imshow("img", img);
+        // cv::waitKey(3);    
         // Output modified video stream
         image_pub_.publish(cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg());
     }

@@ -8,8 +8,18 @@ add_compile_options(-std=c++11)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 set(PACKAGE_DEPENDENCIES people_detector)
-
 set(PCL_DIR /home/lhd/Documents/pcl-1.9/share/pcl-1.9)
+
+set(TERGEO_ROOT_PATH /home/lhd/tongji/tergeo)
+include_directories(${TERGEO_ROOT_PATH})
+message(${TERGEO_ROOT_PATH}) 
+include(${TERGEO_ROOT_PATH}/cmake/3rdparty.cmake)
+include(${TERGEO_ROOT_PATH}/cmake/options.cmake)
+include(${TERGEO_ROOT_PATH}/cmake/find_tergeo.cmake)
+include(${TERGEO_ROOT_PATH}/cmake/find_tergeo_algorithm.cmake)
+include(${TERGEO_ROOT_PATH}/cmake/find_qt.cmake)
+include(${TERGEO_ROOT_PATH}/cmake/find_vtk.cmake)
+
 find_package(PCL REQUIRED COMPONENTS)
 find_package(OpenCV REQUIRED)
 

@@ -8,8 +8,11 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_representation.h>
 #include <pcl/io/pcd_io.h>
+
+#include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
+
 #include <pcl/features/normal_3d.h>
 #include <pcl/registration/icp.h>
 #include <pcl/registration/icp_nl.h>
@@ -88,6 +91,7 @@ public:
         _left_cloud_sub = new message_filters::Subscriber<sensor_msgs::PointCloud2>(nh, "/sensor/lidar16/left/pointcloud", 1);
         _right_cloud_sub = new message_filters::Subscriber<sensor_msgs::PointCloud2>(nh, "/sensor/lidar16/right/pointcloud", 1);
 
+
         _sync = new message_filters::Synchronizer<SyncPolicy>(
         SyncPolicy(10), *_detection_sub, *_left_cloud_sub, *_right_cloud_sub);
         _sync->registerCallback(boost::bind(&SubscribeAndPublish::combineCallback, this, _1, _2, _3));
@@ -104,59 +108,53 @@ public:
         Eigen::Vector3f tvec(-0.63735, -1.14282, -0.0275067);//No.6  -0.066045, -1.23302, 0.0377227
         _pairTransform.block<3,3>(0,0) = rot;
         _pairTransform.block<3,1>(0,3) = tvec;
-        // std::cout<<pairTransform<<std::endl;
-
-
     }  
 
 
     void combineCallback(const detector_msg::detection_resultConstPtr &dt_result,
                         const sensor_msgs::PointCloud2ConstPtr &left, 
                         const sensor_msgs::PointCloud2ConstPtr &right){ 
-        
-        // std::cout<<dt_result->boxs.size()<<std::endl;
         dt_result->boxs[0].l_x;
         pcl::fromROSMsg (*right, *cloud_right);
-        // ROS_INFO("get right cloud message");
         pcl::fromROSMsg (*left, *cloud_left);
-        // ROS_INFO("get left cloud message");
         cloud_raw_merge->clear();
         *cloud_raw_merge += *cloud_left;
+    
+
         pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud (new pcl::PointCloud<pcl::PointXYZ> ());    
         pcl::transformPointCloud (*cloud_right, *transformed_cloud, _pairTransform);
         *cloud_raw_merge += *transformed_cloud;
-        // std::cout<<cloud_raw_merge->size()<<std::endl;
-
+    
+        const auto project_t1 = std::chrono::high_resolution_clock::now();
         project_pc_image(image_origin,cloud_raw_merge,dt_result);
-        
+        const auto project_t2 = std::chrono::high_resolution_clock::now();
+        ROS_INFO("Project a cloud cost %f ms",(project_t2-project_t1).count()*1e-6);
+
         const auto t1 = std::chrono::high_resolution_clock::now();
         if(cloud_former->size()>0){
             pairAlign(cloud_raw_merge, cloud_former, cloud_all, _sequence_transform, false);
-            std::cout<<_sequence_transform<<std::endl;
+            // std::cout<<_sequence_transform<<std::endl;
         }
         const auto t2 = std::chrono::high_resolution_clock::now();
-        std::cout << "Used time:" << (t2-t1).count()*1e-6 << "ms" << std::endl;
+        ROS_INFO("Total ICP cost %f ms",(t2-t1).count()*1e-6);
+
         cloud_former->clear();
         pcl::copyPointCloud(*cloud_raw_merge,*cloud_former);
 
 
         sensor_msgs::PointCloud2 ros_cloud;
-        pcl::toROSMsg(*cloud_raw_merge, ros_cloud);
+        pcl::toROSMsg(*cloud_all, ros_cloud);//topic pulicted
         ros_cloud.header = left->header;
         ros_cloud.header.frame_id = "camera_init";
         _pub.publish(ros_cloud);
     }
 
-    void data_clean_remove_movable(){
-        
-    }
 
 
     bool in_bounding_box(cv::Point2f &pt,const float &l_x,const float &l_y,const float &r_x,const float &r_y){
         if( pt.x < l_x || pt.y < l_y || pt.x > r_x || pt.y > r_y){
             return false;
             }
-        // std::cout<<pt<<'\t'<<l_x<<'\t'<<l_y<<'\t'<<r_x<<'\t'<<r_y<<'\n';
         return true;
     }
     
@@ -170,7 +168,8 @@ public:
         for (size_t i = 0; i < cloud_withoutNAN->size(); ++i)
         {
             pcl::PointXYZ point_3d = cloud_withoutNAN->points[i];
-            // if (point_3d.x > 2  && point_3d.y > 2 && point_3d.z > -2)
+            if (!(point_3d.x < 0 && point_3d.x > -3 && abs(point_3d.y) < 1.3)
+                && point_3d.x < 50 && point_3d.x > -50 && point_3d.y < 50 && point_3d.y > -50)//截取周围环境点云
             {
                 pts_3d.emplace_back(cv::Point3f(point_3d.x, point_3d.y, point_3d.z));
             }
@@ -182,10 +181,8 @@ public:
         cv::Mat img_show = cv::Mat::zeros(img.size(),CV_8UC3);
         int image_rows = image_origin.rows;
         int image_cols = image_origin.cols;
-        std::cout<<pts_2d.size()<<std::endl;
         int count=0;
         bool outside;
-        std::cout<<dt_result->boxs.size()<<std::endl;
         for (size_t i = 0; i < pts_2d.size(); ++i)
         {
             outside = true;
@@ -202,131 +199,67 @@ public:
                     }}
             if(outside){
                 cloud->push_back(pcl::PointXYZ(pts_3d[i].x,pts_3d[i].y,pts_3d[i].z));
-                // cv::circle(img_show, point_2d, 5, cv::Scalar(255, 0, 0), -1);
             }
         }
-
-
-            // if (point_2d.x < 0 || point_2d.x > image_cols || point_2d.y < 0 || point_2d.y > image_rows){
-            //     continue;
-            // }
-            // else{
-            //     cv::circle(img_show, point_2d, 5, cv::Scalar(255, 0, 0), -1);          
-            //     ++count;
-            // }
-
-            // if (point_2d.x > 0 && point_2d.x < image_cols && point_2d.y > 0 && point_2d.y < image_rows){
-            //     cv::circle(img_show, point_2d, 5, cv::Scalar(255, 0, 0), -1);
-            //     ++count;
-            // } 
-            // else{
-            //     continue;
-            // }  
-        cv::namedWindow("img_projection",0);
-        cv::imshow("img_projection", img_show);
-        cv::waitKey(3); 
+        // cv::namedWindow("img_projection",0);
+        // cv::imshow("img_projection", img_show);
+        // cv::waitKey(3); 
     }
 
 
     void pairAlign (const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_src, const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tgt,
                     pcl::PointCloud<pcl::PointXYZ>::Ptr output, Eigen::Matrix4f &final_transform, bool downsample = false)
     {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_to_filter(new pcl::PointCloud<pcl::PointXYZ>),cloud_tmp(new pcl::PointCloud<pcl::PointXYZ>);
+        const auto cp_t1 = std::chrono::high_resolution_clock::now();
+
+        *cloud_to_filter = *cloud_src;
+        
+        const auto cp_t2 = std::chrono::high_resolution_clock::now();
+        ROS_INFO("Copy a cloud frame cost %f ms",(cp_t2-cp_t1).count()*1e-6);
+        
+        //半径滤波器
+        const auto rd_filter_t1 = std::chrono::high_resolution_clock::now();
+        pcl::RadiusOutlierRemoval<pcl::PointXYZ> rd_filter;
+	    // build the filter
+	    rd_filter.setInputCloud(cloud_to_filter);
+	    rd_filter.setRadiusSearch(0.1);
+	    rd_filter.setMinNeighborsInRadius(3);
+	    // apply filter
+	    rd_filter.filter(*cloud_tmp);
+        const auto rd_filter_t2 = std::chrono::high_resolution_clock::now();
+        ROS_INFO("Radius filter a cloud cost %f ms",(rd_filter_t2-rd_filter_t1).count()*1e-6);
+
+        //体素滤波器
+        const auto filter_t1 = std::chrono::high_resolution_clock::now();
+        pcl::VoxelGrid<pcl::PointXYZ> sor;//滤波处理对象
+        sor.setInputCloud(cloud_tmp);
+        sor.setLeafSize(0.1f, 0.1f, 0.2f);//设置滤波器处理时采用的体素大小的参数
+        sor.filter(*cloud_to_filter);
+        const auto filter_t2 = std::chrono::high_resolution_clock::now();
+        ROS_INFO("Voxel filter a cloud cost %f ms",(filter_t2-filter_t1).count()*1e-6);
+
+        const auto icp_t1 = std::chrono::high_resolution_clock::now();
         pcl::IterativeClosestPoint<PointT, PointT> icp;
-	    icp.setMaximumIterations(20);
-	    icp.setInputSource(cloud_tgt);
-	    icp.setInputTarget(cloud_src);
-	    icp.align(*cloud_tgt);
-	    //icp.setMaximumIterations(1);  // We set this variable to 1 for the next time we will call .align () function
-	    //std::cout << "Applied " << iterations << " ICP iteration(s) in " << time.toc() << " ms" << std::endl;
+	    icp.setMaximumIterations(50);
+	    icp.setInputSource(cloud_to_filter);
+	    icp.setInputTarget(cloud_tgt);
+	    icp.align(*cloud_to_filter);   
     
-	    if (icp.hasConverged())
-	    {
-	    	// std::cout << "\nICP has converged, score is " << icp.getFitnessScore() << std::endl;
-	    	// std::cout << "\nICP transformation " << iterations << " : cloud_icp -> cloud_in" << std::endl;
-	    	final_transform = icp.getFinalTransformation().cast<float>();
-	    	// print4x4Matrix(transformation_matrix);
+	    if (icp.hasConverged()){	    	
+	    	final_transform = icp.getFinalTransformation().cast<float>();	
 	    }
-	    else
-	    {
+	    else{
 	    	ROS_ERROR("\nICP has not converged.\n");
-	    	// system("pause");
-	    	// return (-1);
 	    }
-        pcl::PointCloud<pcl::PointXYZ>::Ptr tmp;
-        pcl::transformPointCloud (*cloud_tgt, *tmp, final_transform);
-        *output += *tmp;
-        
-        
-        // PointCloud::Ptr src (new PointCloud);//倒贴的
-        // PointCloud::Ptr tgt (new PointCloud);//被贴的
-        // pcl::VoxelGrid<PointT> grid;//下采样
-        // if (downsample){
-        //     grid.setLeafSize (0.05, 0.05, 0.05);
-        //     grid.setInputCloud (cloud_src);
-        //     grid.filter (*src);
-        //     grid.setInputCloud (cloud_tgt);
-        //     grid.filter (*tgt);
-        // }else{
-        //     src = cloud_src;
-        //     tgt = cloud_tgt;
-        // }
+        const auto icp_t2 = std::chrono::high_resolution_clock::now();
+        ROS_INFO("Pair a cloud cost %f ms",(icp_t2-icp_t1).count()*1e-6);
 
-        // PointCloudWithNormals::Ptr points_with_normals_src (new PointCloudWithNormals);//倒贴的变成带法线的
-        // PointCloudWithNormals::Ptr points_with_normals_tgt (new PointCloudWithNormals);
-        // pcl::NormalEstimation<PointT, PointNormalT> norm_est;//法线估算对象
-        // pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());//kdtree对象，Kd_tree是一种数据结构便于管理点云以及搜索点云，法线估计对象会使用这种结构来找到最近邻点
-        // norm_est.setSearchMethod (tree);//使用kdtree的方法搜索估计法线
-        // norm_est.setKSearch (30);//设置最近邻的数量，或者用setRadiusSearch，对每个点设置一个半径，用来确定法线和曲率
-        // norm_est.setInputCloud (src);
-        // norm_est.compute (*points_with_normals_src);//计算得到带每个点的法向量
-        // pcl::copyPointCloud (*src, *points_with_normals_src);//将点云复制过去，最后得到的点云，每个点都包含坐标和法向量
-        // norm_est.setInputCloud (tgt);//对被倒贴的也这样操作,弄成带法线的
-        // norm_est.compute (*points_with_normals_tgt);
-        // pcl::copyPointCloud (*tgt, *points_with_normals_tgt);
-
-
-        // MyPointRepresentation point_representation;
-
-        // float alpha[4] = {1.0, 1.0, 1.0, 1.0};//这个是干嘛的？加权曲率维度，以和坐标xyz保持平衡，没看懂
-        // point_representation.setRescaleValues (alpha);
-
-
-        // pcl::IterativeClosestPointNonLinear<PointNormalT, PointNormalT> reg;//创建非线性ICP对象
-        // reg.setTransformationEpsilon (1e-6);//这个值一般设为1e-6或者更小。意义是什么？
-        // reg.setMaxCorrespondenceDistance (1.0);//设置对应点之间的最大距离（0.1m）,在配准过程中，忽略大于该阈值的点
-        // reg.setMaximumIterations (40);//迭代次数，几十上百都可能出现
-
-        // reg.setPointRepresentation (boost::make_shared<const MyPointRepresentation> (point_representation));//括号内类比于：int a？？？ make_shared<T>:C创建一个shared_ptr共享指针
-        // reg.setInputSource (points_with_normals_src);//非线性icp主角：带法线的点云
-        // reg.setInputTarget (points_with_normals_tgt);
-
-        // Eigen::Matrix4f Ti = Eigen::Matrix4f::Identity (), prev, targetToSource;//声明3个变量，其中Ti=Eigen::Matrix4f::Identity ()创建一个单位矩阵
-        // PointCloudWithNormals::Ptr reg_result = points_with_normals_src;//存放icp结果
-
-        // for (int i = 0; i < 30; ++i)//这个for循环是和距离阈值有关的，不断的减小距离阈值30次，相当于不断地离目标点云越来越近
-        // {
-        //    // PCL_INFO ("Iteration Nr. %d.\n", i);
-
-        //     points_with_normals_src = reg_result;//将上次的拼接结果作为本次拼接的倒贴者。因为在for循环里，不是每次都定义，所以直接用reg_result这个变量
-
-        //     reg.setInputSource (points_with_normals_src);
-        //     reg.align (*reg_result);//拼接
-
-        //     Ti = reg.getFinalTransformation()*Ti;//将本次最终的转换矩阵累积到之前的转换矩阵
-
-        //     if (fabs ((reg.getLastIncrementalTransformation () - prev).sum ()) < reg.getTransformationEpsilon ())//如果上次和本次的转换矩阵差值的元素和小于我们设置的值（就是相比上一次动不了多少了）
-        //         reg.setMaxCorrespondenceDistance (reg.getMaxCorrespondenceDistance () - 0.01);//就将距离阈值设的小一些，把一些远的点去掉，再继续（for循环中）匹配
-        //     prev = reg.getLastIncrementalTransformation ();//更新上一次的变换
-
-
-        // }
-
-        // targetToSource = Ti.inverse();//使倒贴者和被倒贴者互换的矩阵
-
-        // pcl::transformPointCloud (*cloud_tgt, *output, targetToSource);//被倒贴变倒贴了
-
-        // *output += *cloud_src;//贴过去以后和人加一块，变成一家人。拼接完成。
-        // final_transform = targetToSource;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr tmp(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::transformPointCloud (*cloud_to_filter, *tmp, final_transform);
+        output->clear();
+        *output += *cloud_former;
+        *output += *tmp;    
     }
 
 private:  

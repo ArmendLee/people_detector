@@ -1,0 +1,32 @@
+<launch>
+
+  <arg name="rviz" default="true" />
+  <arg name="rosbag" default="true" />
+  <arg name="scanPeriod" default="0.1" />
+  
+  <group if="$(arg rosbag)">
+	<node pkg="rosbag" type="play" args="-r 0.5 -l /media/lhd/BX500/2019-04-11-02-52-28.bag" name="bag_play" output="log"/>
+  </group>
+
+  <node pkg="project_filter_icp" type="project_filter_icp" name="pointcloud_icp" output="screen" respawn="true">
+  </node>
+  <node pkg="people_detector" type="people_detector_node" name="people_detector" output="screen" respawn="true">
+  </node>
+  <!--
+  <node pkg="loam_velodyne" type="laserOdometry" name="laserOdometry" output="screen" respawn="true">
+    <param name="scanPeriod" value="$(arg scanPeriod)" />
+  </node>
+
+  <node pkg="loam_velodyne" type="laserMapping" name="laserMapping" output="screen">
+    <param name="scanPeriod" value="$(arg scanPeriod)" />
+  </node>
+
+  <node pkg="loam_velodyne" type="transformMaintenance" name="transformMaintenance" output="screen">
+  </node>
+  -->
+
+  <group if="$(arg rviz)">
+    <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" output="log" args="-d $(find project_filter_icp)/rviz/rvizConfig.rviz" />
+  </group>
+
+</launch>
