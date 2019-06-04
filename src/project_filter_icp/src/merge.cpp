@@ -77,9 +77,26 @@ public:
         _pairTransform.block<3,3>(0,0) = rot;
         _pairTransform.block<3,1>(0,3) = tvec;
     }
+
+    void initImutoLidar(){
+        Eigen::Vector3f rvec(3.06471694496992, -0.828900259298348, 0.226311990377033);// No.6  -0.0459966, -0.128626, 0.0558593
+        Eigen::Matrix3f rot = Eigen::Matrix3f::Identity();
+        double rot_angle = rvec.norm();
+	      if (std::fabs(rot_angle) > 1e-6) {
+	      	Eigen::Vector3f axis = rvec.normalized();
+          rot = Eigen::AngleAxis<float>(rot_angle, axis);
+	      }
+          
+        Eigen::Vector3f tvec(0.662062909899473, -0.612549212533238, 0);//No.6  -0.066045, -1.23302, 0.0377227
+        _imu_to_lidar.block<3,3>(0,0) = rot;
+        _imu_to_lidar.block<3,1>(0,3) = tvec;
+        _imu_to_lidar=_imu_to_lidar.inverse();
+    }
+
     void combineCallback(const detector_msg::detection_resultConstPtr &dt_result,
                         const sensor_msgs::PointCloud2ConstPtr &left, 
                         const sensor_msgs::PointCloud2ConstPtr &right,const ros_msgs::OdometryConstPtr &pose){ 
+        
         dt_result->boxs[0].l_x;
 
         update_pose(pose);
@@ -138,6 +155,7 @@ public:
                  pose->R[3], pose->R[4], pose->R[5], pose->y,
                  pose->R[6], pose->R[7], pose->R[8], pose->z,
                  0,0,0,1;
+       tmp = _imu_to_lidar * tmp;
         if(cloud_former->size()>0){            
             _sequence_transform = _former_status * tmp.inverse();
         }
@@ -294,6 +312,9 @@ private:
     
     //right lidar to left lidar
     Eigen::Matrix4f _pairTransform = Eigen::Matrix4f::Identity (); //左右lidar 相对位姿
+    Eigen::Matrix4f _imu_to_lidar = Eigen::Matrix4f::Identity (); //左右lidar 相对位姿
+
+
 
     Eigen::Matrix4f _sequence_transform = Eigen::Matrix4f::Identity ();
     Eigen::Matrix4f _former_status = Eigen::Matrix4f::Identity();
