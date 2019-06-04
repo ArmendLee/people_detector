@@ -10,7 +10,7 @@
 
   <node pkg="project_filter_icp" type="project_filter_icp" name="pointcloud_icp" output="screen" respawn="true">
   </node>
-  <node pkg="people_detector" type="people_detector_node" name="people_detector" output="screen" respawn="true">
+  <node pkg="people_detector" type="people_detector_node" name="people_detector" output="log" respawn="true">
   </node>
   <!--
   <node pkg="loam_velodyne" type="laserOdometry" name="laserOdometry" output="screen" respawn="true">

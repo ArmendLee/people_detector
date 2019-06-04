@@ -20,7 +20,7 @@ include(${TERGEO_ROOT_PATH}/cmake/find_tergeo_algorithm.cmake)
 include(${TERGEO_ROOT_PATH}/cmake/find_qt.cmake)
 include(${TERGEO_ROOT_PATH}/cmake/find_vtk.cmake)
 
-find_package(PCL REQUIRED COMPONENTS)
+find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 
 find_package(catkin REQUIRED COMPONENTS
@@ -55,5 +55,6 @@ target_link_libraries(${PROJECT_NAME}
   ${roslib_LIBRARIES}
   ${OpenCV_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${TERGEO_ALGORITHM_FEATURE3D_LIB}
 )
 
