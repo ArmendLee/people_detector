@@ -21,6 +21,8 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/registration/icp.h>
 #include <pcl/registration/icp_nl.h>
+#include <pcl/registration/gicp.h>
+
 #include <pcl/registration/transforms.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -34,12 +36,16 @@
 #include <opencv2/highgui/highgui.hpp>
 
 #include <sensor_msgs/PointCloud2.h>
+#include <nav_msgs/Odometry.h>
 
 #include <detector_msg/bounding_box.h>
 #include <detector_msg/detection_result.h>
 
 #include <ros_msgs/Odometry.h>
 #include "algorithm/feature3d/pcl_utils.h"
+#include "tergeo/common/eigen_utils.h"
+#include <tf/transform_datatypes.h>
+#include <tf/transform_broadcaster.h>
 
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> PointCloud;
@@ -61,7 +67,8 @@ public:
         _sync = new message_filters::Synchronizer<SyncPolicy>(
         SyncPolicy(10), *_detection_sub, *_left_cloud_sub, *_right_cloud_sub, *_pose_sub);
         _sync->registerCallback(boost::bind(&SubscribeAndPublish::combineCallback, this, _1, _2, _3,_4)); 
-        initLidarExtrinsics();       
+        initLidarExtrinsics(); 
+        initImutoLidar(); 
     }  
 
     void initLidarExtrinsics(){
@@ -87,10 +94,15 @@ public:
           rot = Eigen::AngleAxis<float>(rot_angle, axis);
 	      }
           
+        Eigen::Matrix4f tmp = Eigen::Matrix4f::Identity (); //左右lidar 相对位姿
+
         Eigen::Vector3f tvec(0.662062909899473, -0.612549212533238, 0);//No.6  -0.066045, -1.23302, 0.0377227
-        _imu_to_lidar.block<3,3>(0,0) = rot;
-        _imu_to_lidar.block<3,1>(0,3) = tvec;
-        _imu_to_lidar=_imu_to_lidar.inverse();
+        tmp.block<3,3>(0,0) = rot;
+        tmp.block<3,1>(0,3) = tvec;
+        
+        
+
+        _imu_to_lidar=tmp.inverse();
     }
 
     void combineCallback(const detector_msg::detection_resultConstPtr &dt_result,
@@ -125,41 +137,58 @@ public:
         const auto t1 = std::chrono::high_resolution_clock::now();
         if(cloud_former->size()>0){
             pairAlign(without_ground_cloud, cloud_former, cloud_pair, _sequence_transform, false);
-            // std::cout<<_sequence_transform<<std::endl;
+            pcl::copyPointCloud(*without_ground_cloud,*cloud_former);
+        }
+        else{
+            cloud_former->clear();
+            pcl::copyPointCloud(*without_ground_cloud,*cloud_former);
         }
 
         const auto t2 = std::chrono::high_resolution_clock::now();
         ROS_INFO("Total ICP cost %f ms",(t2-t1).count()*1e-6);
-
-        cloud_former->clear();
-        pcl::copyPointCloud(*without_ground_cloud,*cloud_former);
+        
+        // pcl::io::savePLYFileBinary ("tmp.ply", *cloud_pair);
+        
 
 
         sensor_msgs::PointCloud2 ros_cloud;
-        pcl::toROSMsg(*cloud_pair, ros_cloud);//topic pulicted
+        ROS_INFO("Cloud all size is : %d",cloud_former->size());
+        // ROS_INFO("cloud_former size is %d",cloud_former->size());
+
+        pcl::toROSMsg(*cloud_all, ros_cloud);//topic pulished
         ros_cloud.header = left->header;
-        ros_cloud.header.frame_id = "camera_init";
+        ros_cloud.header.frame_id = "rslidar";
         _pub.publish(ros_cloud);
+        pubish_odom(_former_to_init);
     }
 
     void remove_ground(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_src,pcl::PointCloud<pcl::PointXYZ>::Ptr& withoutGround){
         Eigen::Matrix<double, 4, 1> plane_coeff;
         std::vector<int> inliers;
-        tergeo::algorithm::PclUtils::extractPlane(cloud_src,0.2,plane_coeff,inliers);
+        tergeo::algorithm::PclUtils::extractPlane(cloud_src,2,plane_coeff,inliers);
         tergeo::algorithm::PclUtils::extractIndices(cloud_src,withoutGround,inliers,true);
     }
 
     void update_pose(const ros_msgs::OdometryConstPtr &pose){
         Eigen::Matrix4f tmp;
-        tmp<< pose->R[0], pose->R[1], pose->R[2], pose->x,
-                 pose->R[3], pose->R[4], pose->R[5], pose->y,
-                 pose->R[6], pose->R[7], pose->R[8], pose->z,
-                 0,0,0,1;
-       tmp = _imu_to_lidar * tmp;
-        if(cloud_former->size()>0){            
-            _sequence_transform = _former_status * tmp.inverse();
+        tmp<< pose->R[0], pose->R[1], pose->R[2], 0,
+                 pose->R[3], pose->R[4], pose->R[5], 0,
+                 pose->R[6], pose->R[7], pose->R[8], 0,
+                 0,0,0,1;        
+        if(cloud_former->size()>0){
+            tmp(0,3) = pose->x - _former_point[0];
+            tmp(1,3) = pose->y - _former_point[1];
+            tmp(2,3) = pose->z - _former_point[2];            
+            _sequence_transform =  _former_status * tmp.inverse();
+            std::cout<<"_sequence_transform     :"<<_sequence_transform<<endl;
         }
-        _former_status = tmp; 
+        _former_point[0] = pose->x;
+        _former_point[1] = pose->y;
+        _former_point[2] = pose->z;
+        _former_status = tmp;
+        _former_status(0,3) = 0;
+        _former_status(1,3) = 0;
+        _former_status(2,3) = 0; 
     }
 
     bool in_bounding_box(cv::Point2f &pt,const float &l_x,const float &l_y,const float &r_x,const float &r_y){
@@ -180,7 +209,7 @@ public:
         {
             pcl::PointXYZ point_3d = cloud_withoutNAN->points[i];
             if (!(point_3d.x < 0 && point_3d.x > -3 && abs(point_3d.y) < 1.3)
-                && point_3d.x < 25 && point_3d.x > -25 && point_3d.y < 25 && point_3d.y > -25)//截取周围环境点云
+                && point_3d.x < 40 && point_3d.x > -40 && point_3d.y < 40 && point_3d.y > -40)//截取周围环境点云
             {
                 pts_3d.emplace_back(cv::Point3f(point_3d.x, point_3d.y, point_3d.z));
             }
@@ -218,13 +247,14 @@ public:
 
 
     void pairAlign (const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_src, const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tgt,
-                    pcl::PointCloud<pcl::PointXYZ>::Ptr output, Eigen::Matrix4f &final_transform, bool downsample = false)
+                    pcl::PointCloud<pcl::PointXYZ>::Ptr& output, Eigen::Matrix4f &final_transform, bool downsample = false)
     {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_to_filter(new pcl::PointCloud<pcl::PointXYZ>),cloud_tmp(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_to_filter(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tmp(new pcl::PointCloud<pcl::PointXYZ>);
         const auto cp_t1 = std::chrono::high_resolution_clock::now();
 
         pcl::transformPointCloud (*cloud_src, *cloud_to_filter, _sequence_transform);
-        
+        // pcl::copyPointCloud(*cloud_src, *cloud_to_filter);
         const auto cp_t2 = std::chrono::high_resolution_clock::now();
         ROS_INFO("Copy a cloud frame cost %f ms",(cp_t2-cp_t1).count()*1e-6);
         
@@ -250,41 +280,92 @@ public:
         ROS_INFO("Voxel filter a cloud cost %f ms",(filter_t2-filter_t1).count()*1e-6);
 
         const auto icp_t1 = std::chrono::high_resolution_clock::now();
-        pcl::IterativeClosestPoint<PointT, PointT> icp;
-	    icp.setMaximumIterations(50);
-	    icp.setInputSource(cloud_to_filter);
-	    icp.setInputTarget(cloud_tgt);
-	    icp.align(*cloud_to_filter);   
-    
-	    if (icp.hasConverged()){	    	
-	    	final_transform = icp.getFinalTransformation().cast<float>();	
-	    }
-	    else{
-	    	ROS_ERROR("\nICP has not converged.\n");
-	    }
-        const auto icp_t2 = std::chrono::high_resolution_clock::now();
-        ROS_INFO("Pair a cloud cost %f ms",(icp_t2-icp_t1).count()*1e-6);
 
-        pcl::PointCloud<pcl::PointXYZ>::Ptr tmp(new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::transformPointCloud (*cloud_to_filter, *tmp, final_transform);
+
+        pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
+        icp.setMaximumIterations(1000);
+        icp.setMaxCorrespondenceDistance(0.1);
+        icp.setTransformationEpsilon(1e-6);
+        icp.setEuclideanFitnessEpsilon(1e-2);
+        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree_src(new pcl::search::KdTree<pcl::PointXYZ>());
+        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree_dst(new pcl::search::KdTree<pcl::PointXYZ>());
+        icp.setInputSource(cloud_to_filter);
+        icp.setSearchMethodSource(tree_src);
+        icp.setInputTarget(cloud_tgt);
+        icp.setSearchMethodTarget(tree_dst);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr align(new pcl::PointCloud<pcl::PointXYZ>());
+        icp.align(*align);
+        final_transform = icp.getFinalTransformation(); 
+        std::cout<<final_transform<<std::endl;
+
+        // pcl::IterativeClosestPoint<PointT, PointT> icp;
+	    // icp.setMaximumIterations(1000);
+	    // icp.setInputSource(cloud_to_filter);
+	    // icp.setInputTarget(cloud_tgt);
+	    // icp.align(*cloud_to_filter);   
+
+        // final_transform = _former_to_init * final_transform;
+        // const auto icp_t2 = std::chrono::high_resolution_clock::now();
+        // // ROS_INFO("Pair a cloud cost %f ms",(icp_t2-icp_t1).count()*1e-6);
+        // _after_pair->clear();
+        // pcl::transformPointCloud (*cloud_to_filter, *_after_pair, final_transform);
+        // _former_to_init = final_transform;
+        // output->clear();
+        // *output += *cloud_former;
+        // *output += *_after_pair;
+        // *cloud_all += *_after_pair;
+        final_transform = final_transform;// _sequence_transform
+        pcl::transformPointCloud (*cloud_to_filter, *_after_pair, final_transform);
+
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_from_init(new pcl::PointCloud<pcl::PointXYZ>);
+
+        Eigen::Matrix4f init_to_now =_former_to_init *  (_sequence_transform * final_transform).inverse();
+        _former_to_init = init_to_now;
+        pcl::transformPointCloud (*cloud_src, *cloud_from_init, init_to_now);
+
+        std::cout<<final_transform<<std::endl;
+
+        // _after_pair->clear();
         output->clear();
-        *output += *cloud_former;
-        *output += *tmp;    
-        *cloud_all += *tmp;
-        _count++;
-        if(_count > 10){                        
-            std::string filename = "./cloud_saved.pcd";
-            // pcl::io::savePCDFileASCII (filename, *cloud_all); //将点云保存到PCD文件中
-            filename += ".ply";
-            pcl::io::savePLYFileBinary (filename, *cloud_all);
-            _count = 0;
-            cloud_all->clear();
-        }
+
+        // pcl::copyPointCloud(*align,*_after_pair);
+        *output += *_after_pair;
+        *output += *cloud_tgt;
+        *cloud_all += *cloud_from_init;
+
+
     }
+
+void pubish_odom(const Eigen::Matrix4f status_matrix){
+    Eigen::Matrix3f tmp = status_matrix.block(0,0,3,3);
+    Eigen::Matrix<float, 3, 1> RPY = tergeo::common::eigen::RotationToRPY(tmp);
+    geometry_msgs::Quaternion geoQuat = tf::createQuaternionMsgFromRollPitchYaw(RPY(0),RPY(1),RPY(2));
+   _odomAftMapped.header.stamp = ros::Time::now();
+   _odomAftMapped.header.frame_id = "rslidar";
+
+   _odomAftMapped.pose.pose.orientation.x = -geoQuat.y;
+   _odomAftMapped.pose.pose.orientation.y = -geoQuat.z;
+   _odomAftMapped.pose.pose.orientation.z = geoQuat.x;
+   _odomAftMapped.pose.pose.orientation.w = geoQuat.w;
+   _odomAftMapped.pose.pose.position.x = status_matrix(0,3);
+   _odomAftMapped.pose.pose.position.y = status_matrix(1,3);
+   _odomAftMapped.pose.pose.position.z = status_matrix(2,3);
+   _odomAftMapped.twist.twist.angular.x = RPY(0);
+   _odomAftMapped.twist.twist.angular.y = RPY(1);
+   _odomAftMapped.twist.twist.angular.z = RPY(2);
+   _odomAftMapped.twist.twist.linear.x = status_matrix(0,3);;
+   _odomAftMapped.twist.twist.linear.y = status_matrix(1,3);
+   _odomAftMapped.twist.twist.linear.z = status_matrix(2,3);
+   _pubOdomAftMapped.publish(_odomAftMapped);
+}
+
 
 private:  
     ros::NodeHandle nh;   
-    ros::Publisher _pub = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_surround", 1);;
+    ros::Publisher _pub = nh.advertise<sensor_msgs::PointCloud2>("/after_merge", 1);
+    ros::Publisher _pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/laser_Odom", 1);
+
     message_filters::Subscriber<detector_msg::detection_result> *_detection_sub;
     message_filters::Subscriber<sensor_msgs::PointCloud2>  *_left_cloud_sub, *_right_cloud_sub;
     message_filters::Subscriber<ros_msgs::Odometry> *_pose_sub;
@@ -293,7 +374,7 @@ private:
     typedef message_filters::sync_policies::ApproximateTime<detector_msg::detection_result, 
                 sensor_msgs::PointCloud2, sensor_msgs::PointCloud2, ros_msgs::Odometry> SyncPolicy;
     message_filters::Synchronizer<SyncPolicy> *_sync;
-    
+    nav_msgs::Odometry _odomAftMapped;
 
     int _count;
 
@@ -307,6 +388,8 @@ private:
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_right {new pcl::PointCloud<pcl::PointXYZ>};//每两个相加的结果
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_raw_merge {new pcl::PointCloud<pcl::PointXYZ>};
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_former {new pcl::PointCloud<pcl::PointXYZ>};//加工后的pcl格式
+    pcl::PointCloud<pcl::PointXYZ>::Ptr _after_pair{new pcl::PointCloud<pcl::PointXYZ>};
+
     sensor_msgs::PointCloud2 cloud_out;//转换为ros格式
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_last{new pcl::PointCloud<pcl::PointXYZ>};
     
@@ -314,10 +397,14 @@ private:
     Eigen::Matrix4f _pairTransform = Eigen::Matrix4f::Identity (); //左右lidar 相对位姿
     Eigen::Matrix4f _imu_to_lidar = Eigen::Matrix4f::Identity (); //左右lidar 相对位姿
 
+    Eigen::Matrix4f _former_to_init = Eigen::Matrix4f::Identity (); //左右lidar 相对位姿
+
+    float _former_point[3];
+
 
 
     Eigen::Matrix4f _sequence_transform = Eigen::Matrix4f::Identity ();
-    Eigen::Matrix4f _former_status = Eigen::Matrix4f::Identity();
+    Eigen::Matrix4f _former_status = Eigen::Matrix4f::Identity();//the former pose from /tergeo/Odometry/pose
     //lidar_camera
     cv::Mat _camera_intrinsic_coeff = (cv::Mat_<double>(3,3,CV_64F) << 1673.764472, 0.0, 615.269162, 0.0, 1671.726940, 486.603777 , 0.0, 0.0, 1.0);
     

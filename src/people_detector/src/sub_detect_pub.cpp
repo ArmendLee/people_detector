@@ -81,9 +81,9 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
         // const auto t2 = std::chrono::high_resolution_clock::now();
         // std::cout << "Used time:" << (t2-t1).count()*1e-6 << "ms" << std::endl;
         detector_ptr->drawBox(img, dets);
-        // cv::namedWindow("img",0);
-        // cv::imshow("img", img);
-        // cv::waitKey(3);    
+        cv::namedWindow("img",0);
+        cv::imshow("img", img);
+        cv::waitKey(3);    
         // Output modified video stream
         image_pub_.publish(cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg());
     }

@@ -30,11 +30,13 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs   
   detector_msg 
+  nav_msgs
+  tf
 )
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES project_filter_icp
- CATKIN_DEPENDS pcl_conversions pcl_msgs pcl_ros roscpp sensor_msgs message_runtime
+ CATKIN_DEPENDS pcl_conversions pcl_msgs pcl_ros tf roscpp sensor_msgs message_runtime nav_msgs
 #  DEPENDS system_lib
 )
 

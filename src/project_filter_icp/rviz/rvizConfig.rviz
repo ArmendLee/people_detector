@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /Grid1
         - /Axes1
         - /PointCloud21
       Splitter Ratio: 0.5
@@ -49,7 +50,7 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 10
+      Plane Cell Count: 100
       Reference Frame: <Fixed Frame>
       Value: true
     - Class: rviz/Axes
@@ -57,7 +58,7 @@ Visualization Manager:
       Length: 4
       Name: Axes
       Radius: 0.200000003
-      Reference Frame: camera_init
+      Reference Frame: rslidar
       Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
@@ -74,9 +75,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 4096
+      Max Intensity: 255
       Min Color: 0; 0; 0
-      Min Intensity: 0
+      Min Intensity: 0.215230659
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
@@ -84,7 +85,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.100000001
       Style: Flat Squares
-      Topic: /laser_cloud_surround
+      Topic: /after_merge
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -93,7 +94,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: camera_init
+    Fixed Frame: rslidar
     Frame Rate: 30
   Name: root
   Tools:
@@ -114,7 +115,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 50.8760452
+      Distance: 51.9496536
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
@@ -129,10 +130,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.694796681
+      Pitch: 0.709795833
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.6426723
+      Yaw: 4.01768446
     Saved: ~
 Window Geometry:
   Displays:
