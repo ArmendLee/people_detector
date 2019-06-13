@@ -1,0 +1,58 @@
+<robot name="cleaning_robot">
+  
+  <link name="base_link"/>
+ 
+  <link name="left_lidar_link"/>
+  <link name="right_lidar_link"/>  
+  <link name="camera_link"/>
+
+  <joint name="left_lidar_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="left_lidar_link"/>
+    <origin xyz="0.365 0.7 0.639" rpy="0 0.5235987755982988 0"/>
+  </joint>
+  <joint name="right_lidar_link_joint" type="fixed">
+    <parent link="left_lidar_link"/>
+    <child link="right_lidar_link"/>
+    <origin xyz="-0.63735 -1.14282 -0.0275067" rpy="-0.0403797 0 -0.514537"/><!-- 0.0558579-->
+  </joint>
+  <joint name="camera_link_joint" type="fixed">
+    <parent link="left_lidar_link"/>
+    <child link="camera_link"/>
+    <origin xyz="-0.7 -0.4 0.3" rpy="0.861723 -1.48802 1.63929"/>
+  </joint>
+
+  <!-- <link name="camera_right_link"/> -->
+
+
+  <!-- <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="laser"/>
+    <origin xyz="1.171 0 0.191" rpy="3.1415 0 0"/>
+  </joint>
+ 
+  <joint name="camera_back_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_back_link"/>
+    <origin xyz="-0.365 0 0.639" rpy="0 0 3.1415"/>
+  </joint>
+
+  <joint name="camera_front_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_front_link"/>
+    <origin xyz="1.025 0 0.606" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="camera_left_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_left_link"/>
+    <origin xyz="0.330 0.331 0.609" rpy="0 0 1.5707"/>
+  </joint>
+
+  <joint name="camera_right_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_right_link"/>
+    <origin xyz="0.330 -0.331 0.564" rpy="0 0 -1.5707"/>
+  </joint> -->
+
+</robot>

@@ -1,0 +1,20 @@
+digraph G {
+node [shape=box];
+"base_link" [label="base_link"];
+"camera_back_link" [label="camera_back_link"];
+"camera_front_link" [label="camera_front_link"];
+"camera_left_link" [label="camera_left_link"];
+"camera_right_link" [label="camera_right_link"];
+"laser" [label="laser"];
+node [shape=ellipse, color=blue, fontcolor=blue];
+"base_link" -> "camera_back_link_joint" [label="xyz: -0.365 0 0.639 \nrpy: 0 -0 3.1415"]
+"camera_back_link_joint" -> "camera_back_link"
+"base_link" -> "camera_front_link_joint" [label="xyz: 1.025 0 0.606 \nrpy: 0 -0 0"]
+"camera_front_link_joint" -> "camera_front_link"
+"base_link" -> "camera_left_link_joint" [label="xyz: 0.33 0.331 0.609 \nrpy: 0 -0 1.5707"]
+"camera_left_link_joint" -> "camera_left_link"
+"base_link" -> "camera_right_link_joint" [label="xyz: 0.33 -0.331 0.564 \nrpy: 0 0 -1.5707"]
+"camera_right_link_joint" -> "camera_right_link"
+"base_link" -> "laser_joint" [label="xyz: 1.171 0 0.191 \nrpy: 3.1415 -0 0"]
+"laser_joint" -> "laser"
+}

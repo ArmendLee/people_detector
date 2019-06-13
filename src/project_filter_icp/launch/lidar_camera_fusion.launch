@@ -5,7 +5,7 @@
   <arg name="scanPeriod" default="0.1" />
   
   <group if="$(arg rosbag)">
-	<node pkg="rosbag" type="play" args="-r 0.5 /media/lhd/BX500/2019-04-11-02-52-28.bag" name="bag_play" output="log"/>
+	<node pkg="rosbag" type="play" args="-r 0.5 /media/lhd/file/2019-06-13-14-40-35.bag" name="bag_play" output="log"/>
   </group>
 
   <node pkg="project_filter_icp" type="project_filter_icp" name="pointcloud_icp" output="screen" respawn="true">
